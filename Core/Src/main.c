@@ -103,10 +103,7 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
   HAL_ADCEx_Calibration_Start(&hadc1);
-  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
-
   char tx_buf[64];
-  uint32_t last_tx_time = 0;
 
   /* USER CODE END 2 */
 
@@ -114,26 +111,22 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    /* USER CODE END WHILE */
+
 
 	  HAL_ADC_Start(&hadc1);
 	  if (HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK)
 	  {
-	      uint32_t adc_val = HAL_ADC_GetValue(&hadc1);      // Сире значення: 0..4095
-	      uint32_t duty    = (adc_val * 1000) / 4095;       // ШІМ: 0..1000
-	      uint32_t mv      = (adc_val * 3300) / 4095;       // Напруга в мВ: 0..3300
+	      uint32_t adc_val = HAL_ADC_GetValue(&hadc1);
+	      uint32_t mv = (adc_val * 3300) / 4095;
 
-	      __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, duty);
+	      // розрахунок температури в °C
+	      int32_t temp_c = (((int32_t)mv - 760) * 10) / 25 + 30;
 
-	      // Відправляємо дані в UART кожні 100 мс (10 Гц) без блокування ШІМ
-	      if (HAL_GetTick() - last_tx_time >= 100)
-	      {
-	          last_tx_time = HAL_GetTick();
-	          int len = snprintf(tx_buf, sizeof(tx_buf), "ADC=%lu,PWM=%lu,mV=%lu\r\n", adc_val, duty, mv);
-	          HAL_UART_Transmit(&huart2, (uint8_t*)tx_buf, len, 100);
-	      }
+	      int len = snprintf(tx_buf, sizeof(tx_buf), "RAW=%lu, mV=%lu, Temp=%ld C\r\n", adc_val, mv, temp_c);
+	      HAL_UART_Transmit(&huart2, (uint8_t*)tx_buf, len, 100);
 	  }
-	  HAL_Delay(10);
+	  HAL_Delay(500);
+    /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
   }
@@ -215,7 +208,7 @@ static void MX_ADC1_Init(void)
   hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
   hadc1.Init.DMAContinuousRequests = DISABLE;
   hadc1.Init.Overrun = ADC_OVR_DATA_PRESERVED;
-  hadc1.Init.SamplingTimeCommon1 = ADC_SAMPLETIME_79CYCLES_5;
+  hadc1.Init.SamplingTimeCommon1 = ADC_SAMPLETIME_160CYCLES_5;
   hadc1.Init.SamplingTimeCommon2 = ADC_SAMPLETIME_1CYCLE_5;
   hadc1.Init.OversamplingMode = DISABLE;
   hadc1.Init.TriggerFrequencyMode = ADC_TRIGGER_FREQ_HIGH;
@@ -226,7 +219,7 @@ static void MX_ADC1_Init(void)
 
   /** Configure Regular Channel
   */
-  sConfig.Channel = ADC_CHANNEL_0;
+  sConfig.Channel = ADC_CHANNEL_TEMPSENSOR;
   sConfig.Rank = ADC_REGULAR_RANK_1;
   sConfig.SamplingTime = ADC_SAMPLINGTIME_COMMON_1;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
